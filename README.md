@@ -1,5 +1,15 @@
 # javaBin
 
+## Platform
+
+Shared AWS infrastructure for CI/CD, compute, and monitoring. See:
+
+- [Platform Overview](platform-overview.md) — architecture, components, how it works
+- [Getting Started](getting-started.md) — how to register an app and get automated CI/CD
+- [Authentication](auth.md) — identity model (OIDC, Identity Center, Cognito)
+- [Platform repo](https://github.com/javaBin/platform) — Terraform code and reusable modules
+- [Registry](https://github.com/javaBin/registry) — app and team registration
+
 ## JavaZone
 
 Active systems for JavaZone:
