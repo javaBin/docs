@@ -8,15 +8,16 @@ IAM Identity Center provides AWS console and CLI access for javaBin volunteers, 
 
 - Google Workspace groups map to IAM Identity Center permission sets
 - Volunteers sign in with their `@java.no` Google account
-- Access is scoped by permission sets (admin, read-only, developer)
+- Access is scoped by 3 permission sets: admin, developer, read-only
+- 2FA is enforced on all Identity Center users
 
-**Status**: Planned. Blocked on Google Workspace admin access. Currently, console access is via IAM users.
+**Status**: Live. IAM Identity Center deployed with SAML federation to Google Workspace.
 
 ## CI/CD Access: GitHub OIDC
 
 App repos authenticate to AWS in CI using GitHub's OIDC provider — no long-lived credentials.
 
-- The platform provisions a per-app IAM role when an app is registered
+- The platform provisions a per-app IAM role when a team is registered
 - GitHub Actions assumes the role via OIDC with conditions on the repo name and branch
 - Roles are scoped by a permission boundary that limits actions to the app's own resources
 - The reusable workflow `javabin.yml` handles role assumption automatically
@@ -24,8 +25,6 @@ App repos authenticate to AWS in CI using GitHub's OIDC provider — no long-liv
 ## App Authentication: Cognito User Pools
 
 For apps that need user authentication, the platform provides Cognito user pools.
-
-Two pools are planned:
 
 | Pool | Purpose | Users |
 |------|---------|-------|
@@ -40,23 +39,22 @@ auth: internal    # or: external, both, none
 
 The platform creates a Cognito app client and passes the client ID/secret via environment variables.
 
-**Status**: Planned but not yet deployed. The `identity` module in the platform repo is a stub. Implementation is blocked on Google Workspace admin access (for internal pool sync). Apps that need auth today use Auth0 at `login.javazone.no`.
+**Status**: Deployed. Both Cognito pools are managed in Terraform (`terraform/platform/identity/`). Apps that need auth can use Cognito or continue using Auth0 at `login.javazone.no`.
 
 ## Developer CLI Authentication
 
-The `javabin` CLI authenticates via:
+The `javabin` CLI (4 commands: init, register, status, whoami) authenticates via:
 
 - **GitHub**: `gh auth token` (gh CLI) or `GITHUB_TOKEN` environment variable
-- **AWS**: Standard credential chain (env vars, `~/.aws/credentials`, SSO)
-- **Cognito**: TODO — device flow auth will be added when Cognito pools are deployed
+- **AWS**: Standard credential chain (env vars, `~/.aws/credentials`, SSO via Identity Center)
 
 ## Summary of Auth Mechanisms
 
 | Context | Mechanism | Status |
 |---------|-----------|--------|
-| AWS Console | Identity Center + Google SAML | Planned |
-| CI/CD | GitHub OIDC | Implemented |
-| App users (internal) | Cognito internal pool | Planned |
-| App users (external) | Cognito external pool | Planned |
+| AWS Console | Identity Center + Google SAML + 2FA | Deployed |
+| CI/CD | GitHub OIDC | Deployed |
+| App users (internal) | Cognito internal pool | Deployed |
+| App users (external) | Cognito external pool | Deployed |
 | Legacy app auth | Auth0 (`login.javazone.no`) | Active |
 | Developer CLI | gh CLI + AWS credential chain | Implemented |

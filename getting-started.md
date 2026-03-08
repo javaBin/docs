@@ -1,6 +1,6 @@
 # Getting Started with the Javabin Platform
 
-How to register an app and get automated CI/CD.
+How to register a team, create a service, and get automated CI/CD.
 
 ## Prerequisites
 
@@ -11,10 +11,19 @@ How to register an app and get automated CI/CD.
 
 ```bash
 brew install javaBin/tap/javabin
+
+# Scaffold a new repo from the app-template
+javabin init
+
+# Register your team (opens a PR against javaBin/registry)
 javabin register
 ```
 
-The wizard prompts for repo name, team, auth, and budget, then creates a registration PR automatically.
+The `init` command scaffolds a new service repo from [javaBin/app-template](https://github.com/javaBin/app-template), including `app.yaml` and `Dockerfile`.
+
+The `register` command prompts for team details and creates a registration PR automatically.
+
+Other commands: `javabin status` (check platform status), `javabin whoami` (show current identity).
 
 ## Option 2: Manual PR
 
@@ -26,36 +35,32 @@ Create `teams/your-team.yaml` in [javaBin/registry](https://github.com/javaBin/r
 name: your-team
 description: What your team works on
 members:
-  - github-username-1
-  - github-username-2
-repos:
-  - your-repo-name
+  - google: firstname.lastname
+    github: github-username
 ```
 
-### Step 2: Register your app
+- `google_group` is derived automatically as `team-{name}@java.no`
+- Budget defaults to 500 NOK/mo
+- All members become GitHub team maintainers
 
-Create `apps/your-service.yaml` in the same registry repo:
+### Step 2: Open a PR
 
-```yaml
-name: your-service
-team: your-team
-repo: javaBin/your-service
-```
+A platform owner (`@javaBin/platform-owners`) reviews and merges it. This triggers team provisioning (Google Group, GitHub team, Cognito group, IAM).
 
-### Step 3: Open a PR
+### Step 3: Add app.yaml to your repo
 
-A platform owner (`@javaBin/platform-owners`) reviews and merges it.
+Add an `app.yaml` to your repo root to configure compute, routing, and resources. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md).
 
 ## What Happens After Registration
 
 1. The platform provisions:
+   - A **Google Group** (`team-{name}@java.no`)
+   - A **GitHub team** with all members as maintainers
    - An **IAM role** your CI pipeline assumes via GitHub OIDC
    - An **ECR repository** for your Docker images
    - A **budget alert** for cost monitoring
 
-2. Add an `app.yaml` to your repo root to configure compute, routing, and resources. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md).
-
-3. Push to `main`. The platform CI pipeline automatically:
+2. Push to `main`. The platform CI pipeline automatically:
    - Builds your code (Java/Maven or TypeScript/pnpm)
    - Builds and pushes a Docker image
    - Plans and applies Terraform infrastructure
@@ -64,12 +69,16 @@ A platform owner (`@javaBin/platform-owners`) reviews and merges it.
 
 ## Creating a New Repo from Template
 
-Start from [javaBin/app-template](https://github.com/javaBin/app-template):
+Use the CLI or start from [javaBin/app-template](https://github.com/javaBin/app-template):
 
-1. Click **"Use this template"** on GitHub
+1. Run `javabin init` (recommended), or click **"Use this template"** on GitHub
 2. Customize `app.yaml` and `Dockerfile`
-3. Register in the registry (see above)
+3. Register your team in the registry (see above)
 4. Push — CI takes over
+
+## Multi-Environment Support
+
+`app.yaml` supports an `environments:` block for dev/prod separation. If omitted, a single production environment is created. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md#environments) for details.
 
 ## No Per-Repo Workflow Files
 

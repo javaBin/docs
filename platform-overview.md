@@ -6,7 +6,7 @@ The Javabin platform is shared AWS infrastructure that gives javaBin app repos a
 
 ```
                     javaBin/registry
-                    (app + team YAML)
+                    (team YAML)
                           │
                           ▼ repository_dispatch
                     javaBin/platform
@@ -37,7 +37,7 @@ Seven Terraform sub-modules manage shared resources:
 | **compute** | ECS Fargate cluster (`javabin-platform`), ECR base config |
 | **monitoring** | SNS topics, EventBridge rules, AWS Config, GuardDuty, Security Hub |
 | **lambdas** | 6 Lambda functions for alerts, cost reporting, compliance, cleanup |
-| **identity** | IAM Identity Center + Cognito user pools (stub, pending Google Admin access) |
+| **identity** | IAM Identity Center (SAML + Google Workspace), 3 permission sets, Cognito user pools, 2FA enforced |
 
 ### Reusable Modules (`terraform/modules/`)
 
@@ -64,13 +64,13 @@ App repos call `javaBin/platform/.github/workflows/javabin.yml` as their CI entr
 | `daily-cost-check` | Daily schedule (08:00 UTC) | Spike detection, silent if no anomalies |
 | `compliance-reporter` | EventBridge (resource create/run) | Reports untagged resources to Slack |
 | `override-cleanup` | Hourly schedule | Deletes stale SSM override tokens |
-| `team-provisioner` | Registry merge (stub) | Syncs teams across Google, GitHub, Cognito, IAM |
+| `team-provisioner` | Registry merge (repository_dispatch) | Syncs teams across Google, GitHub, Cognito, IAM |
 
 ## How Apps Get CI/CD
 
-1. Developer creates a repo from `javaBin/app-template`
-2. Registers the app in `javaBin/registry` (PR with `apps/{name}.yaml`)
-3. Platform owner merges — platform provisions IAM role, ECR repo, budget
+1. Developer creates a repo from `javaBin/app-template` (or runs `javabin init`)
+2. Registers their team in `javaBin/registry` (PR with `teams/{name}.yaml`)
+3. Platform owner merges — team-provisioner syncs Google Group, GitHub team, Cognito, IAM
 4. Developer adds `app.yaml` to repo root with service config
 5. Every push to `main` triggers the full pipeline: build, plan, review, deploy
 
