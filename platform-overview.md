@@ -37,7 +37,7 @@ Seven Terraform sub-modules manage shared resources:
 | **compute** | ECS Fargate cluster (`javabin-platform`), ECR base config |
 | **monitoring** | SNS topics, EventBridge rules, AWS Config, GuardDuty, Security Hub |
 | **lambdas** | 6 Lambda functions for alerts, cost reporting, compliance, cleanup |
-| **identity** | IAM Identity Center (SAML + Google Workspace), 3 permission sets, Cognito user pools, 2FA enforced |
+| **identity** | Cognito user pools (internal + external). Internal pool connected to Google IdP. Identity Center is in `terraform/org/` (deployed) |
 
 ### Reusable Modules (`terraform/modules/`)
 
@@ -64,17 +64,32 @@ App repos call `javaBin/platform/.github/workflows/javabin.yml` as their CI entr
 | `daily-cost-check` | Daily schedule (08:00 UTC) | Spike detection, silent if no anomalies |
 | `compliance-reporter` | EventBridge (resource create/run) | Reports untagged resources to Slack |
 | `override-cleanup` | Hourly schedule | Deletes stale SSM override tokens |
-| `team-provisioner` | Registry merge (repository_dispatch) | Syncs teams across Google, GitHub, Cognito, IAM |
+| `team-provisioner` | Registry merge | Syncs Google Groups, GitHub teams, AWS Budgets, Cognito, Identity Center. Also handles hero provisioning (Workspace accounts, aliases, group membership) |
 
 ## How Apps Get CI/CD
 
 1. Developer creates a repo from `javaBin/app-template` (or runs `javabin init`)
 2. Registers their team in `javaBin/registry` (PR with `teams/{name}.yaml`)
 3. Platform owner merges — team-provisioner syncs Google Group, GitHub team, Cognito, IAM
-4. Developer adds `app.yaml` to repo root with service config
-5. Every push to `main` triggers the full pipeline: build, plan, review, deploy
+4. Developer adds the repo to their GitHub team (via GitHub UI or `gh api orgs/javaBin/teams/TEAM/repos`)
+5. Developer adds `app.yaml` to repo root with service config
+6. Every push to `main` triggers the full pipeline: build, plan, review, deploy
+
+The registry is the IAM gate: unregistered teams have no IAM role, so CI can't deploy. For CI/CD to work, a repo must be under a registered team and have an `app.yaml` at root.
 
 No per-repo workflow files needed. The platform handles everything.
+
+## Registry: Source of Truth for Memberships
+
+The [registry](https://github.com/javaBin/registry) serves two purposes:
+
+**Teams** (`teams/`) — app developer teams that need AWS access. Each team gets an IAM role, budget, GitHub team, and Google Group.
+
+**Groups & Heroes** (`groups/`) — organizational membership for all javaBin volunteers:
+- `groups.yaml` defines all groups (helter, styret, javazone, pkom, kodesmia, region, drift, admin, developers, etc.) with their properties (Google Workspace email, Cognito/Identity Center flags)
+- `heros.yaml` defines all hero members with their group assignments
+
+Changes to `groups/` trigger provisioning: Google Workspace account creation, group membership sync, email aliases, and Cognito/Identity Center sync where configured. Heroes are synced from a yearly Google Sheets application process.
 
 ## AWS Account
 
