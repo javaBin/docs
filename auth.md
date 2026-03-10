@@ -2,6 +2,10 @@
 
 How identity and access control work in the Javabin platform.
 
+## Google Workspace Accounts
+
+All javaBin heroes get a `@java.no` Google Workspace account, auto-created when their entry is added to `groups/heros.yaml` in the registry. An invite is sent to their personal email. Heroes can also request an email alias (e.g., `alex@java.no`) via PR.
+
 ## Console Access: IAM Identity Center + Google Workspace
 
 IAM Identity Center provides AWS console and CLI access for javaBin volunteers, federated via Google Workspace SAML.
@@ -9,9 +13,10 @@ IAM Identity Center provides AWS console and CLI access for javaBin volunteers, 
 - Google Workspace groups map to IAM Identity Center permission sets
 - Volunteers sign in with their `@java.no` Google account
 - Access is scoped by 3 permission sets: admin, developer, read-only
-- 2FA is enforced on all Identity Center users
+- Group membership is managed in `groups/heros.yaml` — the `memberships` field determines which groups a hero belongs to
+- Groups with `identity_center: true` in `groups/groups.yaml` are synced to Identity Center
 
-**Status**: Live. IAM Identity Center deployed with SAML federation to Google Workspace.
+**Status**: Deployed. Terraform applied from `terraform/org/`.
 
 ## CI/CD Access: GitHub OIDC
 
@@ -39,7 +44,7 @@ auth: internal    # or: external, both, none
 
 The platform creates a Cognito app client and passes the client ID/secret via environment variables.
 
-**Status**: Deployed. Both Cognito pools are managed in Terraform (`terraform/platform/identity/`). Apps that need auth can use Cognito or continue using Auth0 at `login.javazone.no`.
+**Status**: Deployed. Internal pool connected to Google Workspace as IdP. External pool deployed but not yet connected to Google. Apps currently use Auth0 at `login.javazone.no` (migration pending).
 
 ## Developer CLI Authentication
 
@@ -54,7 +59,7 @@ The `javabin` CLI (4 commands: init, register, status, whoami) authenticates via
 |---------|-----------|--------|
 | AWS Console | Identity Center + Google SAML + 2FA | Deployed |
 | CI/CD | GitHub OIDC | Deployed |
-| App users (internal) | Cognito internal pool | Deployed |
-| App users (external) | Cognito external pool | Deployed |
+| App users (internal) | Cognito internal pool + Google IdP | Deployed |
+| App users (external) | Cognito external pool | Deployed (Google IdP not yet connected) |
 | Legacy app auth | Auth0 (`login.javazone.no`) | Active |
 | Developer CLI | gh CLI + AWS credential chain | Implemented |
