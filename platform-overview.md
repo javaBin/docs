@@ -41,7 +41,7 @@ Seven Terraform sub-modules manage shared resources:
 
 ### Reusable Modules (`terraform/modules/`)
 
-Twelve Terraform modules that app repos source via `git::` URLs. CI generates expanded Terraform from `app.yaml` using `expand-modules.py` + `registry.py`. Supported resources: ECR, ECS service, ALB routing, IAM role (configurable for ECS/EC2/Lambda), S3, DynamoDB, RDS PostgreSQL, SQS, Secrets Manager. Cross-service access is auto-wired via `access_policy_json` outputs.
+Twelve Terraform modules that app repos source via `git::` URLs. CI validates `app.yaml` and generates Terraform module blocks from it with `generate-modules.py`. Supported resources: ECR, ECS service, ALB routing, IAM role (configurable for ECS/EC2/Lambda), S3, DynamoDB, RDS PostgreSQL, SQS, SSM secrets, Cognito app clients. Cross-service access is auto-wired via `access_policy_json` outputs.
 
 ### Reusable Workflows (`.github/workflows/`)
 

@@ -39,10 +39,10 @@ For apps that need user authentication, the platform provides Cognito user pools
 Apps declare their auth needs in `app.yaml`:
 
 ```yaml
-auth: internal    # or: external, both, none
+auth: internal    # or: external, none
 ```
 
-The platform creates a Cognito app client and passes the client ID/secret via environment variables.
+The platform creates a Cognito app client named `{team}-{name}` and injects `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `COGNITO_ISSUER_URL`, `COGNITO_USER_POOL_ID` and `COGNITO_DOMAIN` into the container. App CI only requests the client (an SSM parameter in the team's own path); the platform's `app-auth-sync` Lambda creates it, so teams can never touch each other's clients. Details: [app.yaml reference — auth](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md#auth).
 
 **Status**: Deployed. Internal pool connected to Google Workspace as IdP. External pool deployed but not yet connected to Google. Apps currently use Auth0 at `login.javazone.no` (migration pending).
 

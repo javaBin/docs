@@ -60,7 +60,7 @@ After your team is provisioned, add your repos to the GitHub team:
 
 **Via CLI:**
 ```bash
-gh api orgs/javaBin/teams/TEAM/repos -f owner=javaBin -f repo=REPO -f permission=push
+gh api -X PUT orgs/javaBin/teams/TEAM/repos/javaBin/REPO -f permission=push
 ```
 
 Replace `TEAM` with your team name and `REPO` with the repository name.
@@ -70,8 +70,9 @@ Replace `TEAM` with your team name and `REPO` with the repository name.
 Add an `app.yaml` to your repo root to configure compute, routing, and resources. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md).
 
 For CI/CD to work on a repo, the repo needs:
-- To be under a registered team (GitHub team membership)
+- To be in the GitHub team named in `app.yaml` `team:` (a repo may be in several teams; the app.yaml one is used)
 - An `app.yaml` at the repo root
+- `.github/workflows/deploy.yml` calling the platform pipeline, with `permissions: { id-token: write, contents: write, pull-requests: write }` — see [reusable workflows](https://github.com/javaBin/platform/blob/main/docs/reusable-workflows.md#quick-start--app-repo). No secrets are needed.
 
 ## What Happens After Registration
 
@@ -83,7 +84,7 @@ For CI/CD to work on a repo, the repo needs:
    - A **budget alert** for cost monitoring
 
 2. After you add a repo to your team and include an `app.yaml`, every push to `main` triggers the full pipeline:
-   - Builds your code (Java/Maven or TypeScript/pnpm)
+   - Builds your code (Java/Maven, Java/Kotlin Gradle, or TypeScript/pnpm)
    - Builds and pushes a Docker image
    - Plans and applies Terraform infrastructure
    - Deploys to ECS Fargate
@@ -101,7 +102,7 @@ Use the CLI or start from [javaBin/app-template](https://github.com/javaBin/app-
 
 ## Multi-Environment Support
 
-`app.yaml` supports an `environments:` block for dev/prod separation. If omitted, a single production environment is created. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md#environments) for details.
+Not supported yet: one `app.yaml` deploys one environment. An `environments:` block fails the pipeline with an explanation. See [Not supported](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md#not-supported).
 
 ## Hero Membership
 
