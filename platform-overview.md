@@ -33,27 +33,29 @@ Seven Terraform sub-modules manage shared resources:
 |--------|-----------|
 | **networking** | VPC, public/private subnets across 3 AZs, NAT gateway, security groups |
 | **ingress** | ALB, ACM wildcard certificate for `*.javazone.no`, Route53 DNS |
-| **iam** | GitHub OIDC provider, per-team CI roles (ABAC), permission boundary |
+| **iam** | GitHub OIDC provider, per-team CI roles for registry teams, permission boundary |
 | **compute** | ECS Fargate cluster (`javabin-platform`), ECR base config |
 | **monitoring** | SNS topics, EventBridge rules, AWS Config, GuardDuty, Security Hub |
-| **lambdas** | 11 Lambda functions for alerts, cost reporting, compliance, budget enforcement, resource tagging, team provisioning |
-| **identity** | Cognito user pools (internal + external). Internal pool connected to Google IdP. Identity Center is in `terraform/org/` (deployed) |
+| **lambdas** | Lambda functions for alerts, cost reporting, compliance, budget enforcement, tagging, team provisioning, CI credential brokering, plan review, Cognito clients, secret rollout |
+| **identity** | Cognito user pools (internal + external), `auth-claims` trigger. Internal pool signs in via Google Workspace SAML. Identity Center is in `terraform/org/` |
 
 ### Reusable Modules (`terraform/modules/`)
 
-Twelve Terraform modules that app repos source via `git::` URLs. CI validates `app.yaml` and generates Terraform module blocks from it with `generate-modules.py`. Supported resources: ECR, ECS service, ALB routing, IAM role (configurable for ECS/EC2/Lambda), S3, DynamoDB, RDS PostgreSQL, SQS, SSM secrets, Cognito app clients. Cross-service access is auto-wired via `access_policy_json` outputs.
+Terraform modules that app repos source via `git::` URLs. CI validates `app.yaml` strictly and generates Terraform module blocks from it with `generate-modules.py`, committing them to the branch. Supported resources: ECR, ECS service, ALB routing, IAM role (configurable for ECS/EC2/Lambda), S3, DynamoDB, RDS PostgreSQL, SQS, SSM secrets, Cognito app clients (requested via SSM, created by the platform). Cross-service access is auto-wired via `access_policy_json` outputs.
 
 ### Reusable Workflows (`.github/workflows/`)
 
-App repos call `javaBin/platform/.github/workflows/javabin.yml` as their CI entrypoint. It orchestrates:
+App repos call `javaBin/platform/.github/workflows/javabin.yml` from a small `deploy.yml` (no secrets; `permissions: id-token, contents, pull-requests: write`). It orchestrates:
 
-1. **Detect** repo contents (JVM, TypeScript, Docker, Terraform)
-2. **Build** (Maven or pnpm)
-3. **Docker build** + ECR push
+1. **Detect** repo contents (`app.yaml`, Maven/Gradle, pnpm, Docker)
+2. **Build** (Maven, Gradle or pnpm)
+3. **Expand** `app.yaml` into Terraform and commit it to the branch
 4. **Terraform plan** + S3 artifact upload
-5. **LLM risk review** via Bedrock (blocks HIGH risk changes)
-6. **Terraform apply** (SHA-verified from plan artifact)
-7. **ECS deploy** (task definition update)
+5. **LLM risk review** of the whole plan by the `plan-review` Lambda (Bedrock); result posted on PRs
+6. **Terraform apply** with credentials from the `apply-gate` Lambda (SHA-verified plan; HIGH/FAILED risk needs a board override via `approve-override.yml`)
+7. **Docker build** + ECR push, then **ECS deploy**
+
+PRs stop after plan + review. See [reusable workflows](https://github.com/javaBin/platform/blob/main/docs/reusable-workflows.md).
 
 ### Lambda Functions
 
@@ -66,29 +68,32 @@ App repos call `javaBin/platform/.github/workflows/javabin.yml` as their CI entr
 | `resource-tagger` | EventBridge (all AWS create/run) | Auto-tags created-by + commit from CI session names |
 | `budget-enforcer` | SNS (AWS Budgets 200%) | Scales team's ECS services to zero, posts Slack alert |
 | `override-cleanup` | Hourly schedule | Deletes stale SSM override tokens |
-| `team-provisioner` | Registry merge | Syncs Google Groups, GitHub teams, AWS Budgets, Cognito, Identity Center, hero provisioning |
-| `apply-gate` | CI invocation | Credential broker for gated Terraform apply with risk verification |
+| `team-provisioner` | Registry merge | Syncs Google Groups, GitHub teams, AWS Budgets, Identity Center, group memberships, hero accounts, Atlassian groups |
+| `ci-broker` | CI invocation | Verifies the job's GitHub OIDC token and repo → `app.yaml` team, vends short-lived team CI credentials |
+| `plan-review` | CI invocation (tf-plan) | LLM risk review of app Terraform plans; writes the verdict the apply gate reads |
+| `apply-gate` | CI invocation (tf-apply) | Credential broker for apply; blocks HIGH/FAILED risk unless a board override exists |
+| `app-auth-sync` | SSM change + daily reconcile | Creates/deletes Cognito app clients requested by `app.yaml` `auth:` |
+| `auth-claims` | Cognito sign-in / refresh | Adds registry groups to `cognito:groups`, enforces `auth.groups` |
+| `app-secret-rollout` | SSM change | Restarts the app's ECS service after `javabin secret set` |
 | `securityhub-summary` | Weekly schedule (Mon 08:00 UTC) | HIGH/CRITICAL Security Hub findings summary |
 | `password-set` | Function URL | Self-service password set for new hero accounts |
 
+Details: [lambda-functions.md](https://github.com/javaBin/platform/blob/main/docs/lambda-functions.md).
+
 ## How Apps Get CI/CD
 
-1. Developer creates a repo from `javaBin/app-template` (or runs `javabin init`)
-2. Registers their team in `javaBin/registry` (PR with `teams/{name}.yaml`)
-3. Platform owner merges — team-provisioner syncs Google Group, GitHub team, Cognito, IAM
-4. Developer adds the repo to their GitHub team (via GitHub UI or `gh api orgs/javaBin/teams/TEAM/repos`)
-5. Developer adds `app.yaml` to repo root with service config
-6. Every push to `main` triggers the full pipeline: build, plan, review, deploy
+1. Register the team in `javaBin/registry` (`teams/<team>.yaml`, or `javabin register-team`). The merge creates the GitHub team, the team's CI roles (`javabin-ci-team-<team>`, `javabin-ci-deploy-<team>`), the SSO permission set `javabin-team-<team>` and a budget.
+2. Add the repo to that GitHub team.
+3. Add `app.yaml` and `.github/workflows/deploy.yml` (or start with `javabin init`).
+4. PRs get plan + review; pushes to `main` (or a manual `workflow_dispatch`) deploy.
 
-The registry is the IAM gate: unregistered teams have no IAM role, so CI can't deploy. For CI/CD to work, a repo must be under a registered team and have an `app.yaml` at root.
-
-No per-repo workflow files needed. The platform handles everything.
+The registry is the IAM gate: unregistered teams have no CI roles, so CI can't deploy. The repo must be in the GitHub team named in `app.yaml` `team:`. Step-by-step: [Getting Started](getting-started.md). Cupcake (`cupcake.javazone.no`, `cupcake-backend.javazone.no`) is the first app running this way.
 
 ## Registry: Source of Truth for Memberships
 
 The [registry](https://github.com/javaBin/registry) serves two purposes:
 
-**Teams** (`teams/`) — app developer teams that need AWS access. Each team gets an IAM role, budget, GitHub team, and Google Group.
+**Teams** (`teams/`) — app developer teams that need AWS access. Each team gets CI roles, an SSO permission set, a budget, a GitHub team, and a Google Group.
 
 **Groups & Heroes** (`groups/`) — organizational membership for all javaBin volunteers:
 - `groups.yaml` defines all groups (helter, styret, javazone, pkom, kodesmia, region, drift, admin, developers, etc.) with their properties (Google Workspace email, Cognito/Identity Center flags)
@@ -102,10 +107,10 @@ Every AWS resource gets 7 tags — 5 static (Terraform-managed) and 2 dynamic (a
 
 | Tag | Source | Example | Purpose |
 |-----|--------|---------|---------|
-| `team` | app.yaml / default_tags | `web-team` | ABAC, cost attribution, budgets |
+| `team` | app.yaml / default_tags | `core` | Access control, cost attribution, budgets |
 | `service` | app.yaml / default_tags | `moresleep` | Cost breakdown within team |
 | `repo` | app.yaml / default_tags | `javaBin/moresleep` | Link resource to source code |
-| `environment` | default_tags | `production` | Multi-env support |
+| `environment` | default_tags | `production` | Environment label (one environment per app today) |
 | `managed-by` | default_tags | `terraform` | Distinguish TF vs console |
 | `created-by` | resource-tagger Lambda | `alice` | Who created (set once) |
 | `commit` | resource-tagger Lambda | `abc12345` | Which commit (set once) |
