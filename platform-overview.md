@@ -20,7 +20,8 @@ The Javabin platform is shared AWS infrastructure that gives javaBin app repos a
           ▼               ▼               ▼
      App repos       ALB routing      Slack alerts
      assume roles    *.javazone.no    cost reports
-     in CI                            compliance
+     in CI           *.java.no        compliance
+                     *.javabin.no
 ```
 
 ## Key Components
@@ -32,7 +33,7 @@ Seven Terraform sub-modules manage shared resources:
 | Module | Resources |
 |--------|-----------|
 | **networking** | VPC, public/private subnets across 3 AZs, NAT gateway, security groups |
-| **ingress** | ALB, ACM wildcard certificate for `*.javazone.no`, Route53 DNS |
+| **ingress** | ALB, ACM wildcard certificates for `*.javazone.no`, `*.java.no` and `*.javabin.no`, Route53 DNS |
 | **iam** | GitHub OIDC provider, per-team CI roles for registry teams, permission boundary |
 | **compute** | ECS Fargate cluster (`javabin-platform`), ECR base config |
 | **monitoring** | SNS topics, EventBridge rules, AWS Config, GuardDuty, Security Hub |
@@ -127,5 +128,6 @@ Teams get a monthly budget (default 500 NOK). Two thresholds:
 
 - **Account**: (private — see platform repo)
 - **Region**: eu-central-1 (Frankfurt)
-- **Domain**: javazone.no (Route53)
+- **Domains**: apps can be hosted one label under javazone.no, java.no or javabin.no (all Route53)
+- **AWS sign-in**: aws.javabin.no, aws.java.no or aws.javazone.no redirect to the IAM Identity Center portal (javabin.awsapps.com/start)
 - **ECS cluster**: javabin-platform
