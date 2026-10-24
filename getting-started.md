@@ -1,139 +1,135 @@
 # Getting Started with the Javabin Platform
 
-How to register a team, add repos, and get automated CI/CD.
+How to register a team, deploy an app with `app.yaml`, and get AWS access as a developer.
 
-## Prerequisites
+[Cupcake](https://github.com/javaBin/frosting) (`cupcake.javazone.no`, frontend) and [cupcake-backend](https://github.com/javaBin/cupcake) (`cupcake-backend.javazone.no`, API) are the first apps running on the platform from `app.yaml`. Their repos are good working examples.
 
-- Your repo must be in the `javaBin` GitHub organization
-- Your team must be registered in [javaBin/registry](https://github.com/javaBin/registry) (or register it as part of this process)
+## 1. Register your team
 
-## Option 1: Using the CLI
+Teams are the registration unit; there is no separate app registration.
 
 ```bash
-brew install javaBin/tap/javabin
-
-# Scaffold a new repo from the app-template
-javabin init
-
-# Register your team (opens a PR against javaBin/registry)
-javabin register-team
+brew install javaBin/tap/javabin   # releases are automatic; update with: brew upgrade javabin
+javabin register-team              # opens a PR against javaBin/registry
 ```
 
-The `init` command scaffolds a new service repo from [javaBin/app-template](https://github.com/javaBin/app-template), including `app.yaml` and `Dockerfile`.
-
-The `register-team` command prompts for team details and creates a team registration PR automatically.
-
-Other commands: `javabin status` (check platform status), `javabin whoami` (show current identity).
-
-## Option 2: Manual PR
-
-### Step 1: Register your team (if not already registered)
-
-Create `teams/your-team.yaml` in [javaBin/registry](https://github.com/javaBin/registry):
+Or create `teams/<team>.yaml` in [javaBin/registry](https://github.com/javaBin/registry) by hand:
 
 ```yaml
-name: your-team
+name: yourteam          # lowercase letters only, max 12 chars
 description: What your team works on
 members:
   - google: firstname.lastname
     github: github-username
-budget_nok: 5000  # Optional, defaults to 500 NOK/mo
+budget_nok: 5000        # optional, default 500 NOK/month
 ```
 
-- `google_group` is derived automatically as `team-{name}@java.no`
-- Budget defaults to 500 NOK/mo
-- All members become GitHub team maintainers
+A platform owner (`@javaBin/platform-owners`) reviews and merges. The merge provisions:
 
-### Step 2: Open a PR
+- a Google Group `team-<team>@java.no` and a GitHub team (members become maintainers)
+- the team's AWS CI roles `javabin-ci-team-<team>` and `javabin-ci-deploy-<team>` (only registry teams get them, so an unregistered team cannot deploy)
+- an IAM Identity Center permission set `javabin-team-<team>` for the members
+- a monthly AWS budget (alert at 80%, services scaled to zero at 200%)
 
-A platform owner (`@javaBin/platform-owners`) reviews and merges it. This triggers team provisioning (Google Group, GitHub team, Cognito group, IAM).
+## 2. Add the repo to your team
 
-### Step 3: Add repos to your team
+The repo must belong to the GitHub team named in `app.yaml` `team:`. A repo may be in several teams; the `app.yaml` one is used.
 
-After your team is provisioned, add your repos to the GitHub team:
-
-**Via GitHub UI:**
-1. Go to [github.com/orgs/javaBin/teams](https://github.com/orgs/javaBin/teams)
-2. Select your team
-3. Go to the **Repositories** tab
-4. Click **Add repository** and select your repo
-
-**Via CLI:**
 ```bash
-gh api orgs/javaBin/teams/TEAM/repos -f owner=javaBin -f repo=REPO -f permission=push
+gh api -X PUT orgs/javaBin/teams/<team>/repos/javaBin/<repo> -f permission=push
 ```
 
-Replace `TEAM` with your team name and `REPO` with the repository name.
+Or in the GitHub UI: **Teams → your team → Repositories → Add repository**.
 
-### Step 4: Add app.yaml to your repo
+## 3. Add `app.yaml` and `deploy.yml`
 
-Add an `app.yaml` to your repo root to configure compute, routing, and resources. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md).
+`javabin init` scaffolds a new repo from [javaBin/app-template](https://github.com/javaBin/app-template) with `app.yaml`, `Dockerfile` and the deploy workflow. For an existing repo, add them yourself.
 
-For CI/CD to work on a repo, the repo needs:
-- To be under a registered team (GitHub team membership)
-- An `app.yaml` at the repo root
+`app.yaml` at the repo root declares compute, routing, resources and auth. It is validated strictly: unknown or unsupported fields fail the pipeline with a message. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md).
 
-## What Happens After Registration
+```yaml
+name: myapp
+team: yourteam
+routing:
+  host: myapp.javazone.no
+  priority: 120
+```
 
-1. The platform provisions:
-   - A **Google Group** (`team-{name}@java.no`)
-   - A **GitHub team** with all members as maintainers
-   - A **Cognito group** for identity management
-   - **IAM resources** your CI pipeline assumes via GitHub OIDC
-   - A **budget alert** for cost monitoring
+`.github/workflows/deploy.yml` calls the platform pipeline. No repository or organization secrets are needed; AWS access is GitHub OIDC.
 
-2. After you add a repo to your team and include an `app.yaml`, every push to `main` triggers the full pipeline:
-   - Builds your code (Java/Maven or TypeScript/pnpm)
-   - Builds and pushes a Docker image
-   - Plans and applies Terraform infrastructure
-   - Deploys to ECS Fargate
-   - Sets up CloudWatch alarms
+```yaml
+name: Deploy
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:      # manual deploys
 
-## Creating a New Repo from Template
+permissions:
+  id-token: write
+  contents: write         # the pipeline commits generated Terraform to the branch
+  pull-requests: write    # plan + review comment on PRs
 
-Use the CLI or start from [javaBin/app-template](https://github.com/javaBin/app-template):
+jobs:
+  javabin:
+    uses: javaBin/platform/.github/workflows/javabin.yml@main
+```
 
-1. Run `javabin init` (recommended), or click **"Use this template"** on GitHub
-2. Customize `app.yaml` and `Dockerfile`
-3. Register your team in the registry (see above)
-4. Add the repo to your GitHub team (see Step 3 above)
-5. Push — CI takes over
+Pull requests get a Terraform plan and an LLM risk review as a PR comment. Pushes to `main` build (Maven, Gradle or pnpm), apply Terraform, push the Docker image and deploy to ECS Fargate. Plans the review rates HIGH (or that it could not review, FAILED) are blocked until a board member approves an override. See [reusable workflows](https://github.com/javaBin/platform/blob/main/docs/reusable-workflows.md).
 
-## Multi-Environment Support
+## 4. Developer AWS access
 
-`app.yaml` supports an `environments:` block for dev/prod separation. If omitted, a single production environment is created. See the [app.yaml reference](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md#environments) for details.
+Sign in with your `@java.no` Google account through IAM Identity Center. Needs the AWS CLI v2 (`brew install awscli`).
 
-## Hero Membership
+```bash
+javabin aws setup     # writes the SSO session + one profile per role you have, then signs in
+javabin aws doctor    # checks config, token, and which profile javabin would use
+```
 
-The registry is also the source of truth for all javaBin hero volunteers (~70 people/year). This is separate from team registration — teams are for app developers who need AWS access, heroes are all active volunteers.
+Use the `javabin-team-<team>` profile for your team's resources (`--profile javabin-team-<team>` or `AWS_PROFILE`). Sessions last about 8 hours; renew with `aws sso login --sso-session javabin`.
 
-### How hero membership works
+## 5. Secrets
 
-1. Board sends yearly Google Forms for hero applications
-2. Responses go to a Google Sheet, board marks approved heroes
-3. Board triggers a sync (Apps Script button or GitHub Actions workflow)
-4. Sync creates a PR on the registry updating `groups/heros.yaml`
-5. PR reviewed and merged — triggers provisioning:
-   - Google Workspace accounts auto-created for new heroes
-   - All heroes added to `helter@java.no`
-   - Heroes added to their membership groups (styret, javazone, pkom, kodesmia, region, etc.)
+Declare secrets in `app.yaml`:
 
-### Registry structure
+```yaml
+resources:
+  secrets:
+    - name: api-key
+      env: API_KEY
+```
+
+The first deploy creates each one in SSM with the value `PLACEHOLDER`. Set the real value from the app repo:
+
+```bash
+javabin secret list           # which secrets still hold PLACEHOLDER
+javabin secret set api-key    # prompts without echo; --stdin to pipe
+```
+
+The platform restarts the service within a minute so the new value is picked up.
+
+## Not supported
+
+These fail the pipeline with an explanation (see [Not supported](https://github.com/javaBin/platform/blob/main/docs/app-yaml-reference.md#not-supported)):
+
+- `environments:` — one `app.yaml` deploys one environment. For a dev environment, deploy a second app (e.g. `name: myapp-dev`) from its own repo.
+- `budget_alert_nok` — budgets are per team: set `budget_nok` in the registry team file.
+- `auth.pool: both` — run two services, one per pool.
+
+## Hero membership
+
+The registry is also the source of truth for all javaBin hero volunteers (~70 people/year). This is separate from teams: teams are for app developers who need AWS access, heroes are all active volunteers.
+
+1. The board sends yearly Google Forms for hero applications; approved heroes are marked in the response sheet.
+2. A sync opens a PR on the registry updating `groups/heros.yaml`.
+3. Merging provisions Google Workspace accounts for new heroes, adds everyone to `helter@java.no`, and adds heroes to their membership groups (styret, javazone, pkom, kodesmia, region, etc.).
 
 ```
 registry/
-  teams/              # App developer teams (AWS IAM, budgets, GitHub teams)
+  teams/              # app developer teams (GitHub team, AWS roles, budget)
   groups/
-    groups.yaml       # All group definitions (Google email, Cognito/IC flags)
-    heros.yaml        # All hero members (name, email, alias, memberships)
+    groups.yaml       # group definitions (Google email, Cognito/Identity Center flags)
+    heros.yaml        # heroes (name, email, alias, memberships)
 ```
 
-- `groups.yaml` defines what groups exist and their properties
-- `heros.yaml` defines who the heroes are and which groups they belong to
-- Being in `heros.yaml` = member of `helter` (implicitly)
-- The `memberships` field controls additional group assignments
-- Heroes can PR an email alias (e.g., `alex@java.no`)
-
-## No Per-Repo Workflow Files
-
-The platform provides reusable workflows. Your repo does not need its own `.github/workflows/` directory for standard CI/CD. The entrypoint workflow (`javabin.yml`) detects your repo contents and runs the appropriate build and deploy steps.
+Being in `heros.yaml` implies membership of `helter`; the `memberships` field adds other groups. Heroes can PR an email alias (e.g. `alex@java.no`).

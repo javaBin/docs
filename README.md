@@ -5,8 +5,8 @@
 Shared AWS infrastructure for CI/CD, compute, and monitoring. See:
 
 - [Platform Overview](platform-overview.md) — architecture, components, how it works
-- [Getting Started](getting-started.md) — how to register a team and get automated CI/CD
-- [Authentication](auth.md) — identity model (OIDC, Identity Center, Cognito)
+- [Getting Started](getting-started.md) — register a team, deploy with `app.yaml`, AWS access, secrets
+- [Authentication](auth.md) — identity model (Identity Center, GitHub OIDC, Cognito app auth)
 - [Platform repo](https://github.com/javaBin/platform) — Terraform code and reusable modules
 - [Registry](https://github.com/javaBin/registry) — team registration and hero membership
 
@@ -66,14 +66,12 @@ Current repository: https://github.com/javaBin/switchredux
 
 ### Cupcake and Frosting
 
-- under development - not yet in use \*
-
-A simpler cake providing read-only access to SP for the regions.
+A simpler cake providing read-only access to SP for the regions. The first app running on the Javabin platform from `app.yaml`, with Cognito login for heroes.
 
 Current repositories:
 
-Backend - [cupcake](https://github.com/javaBin/cupcake)
-Frontend - [frosting](https://github.com/javaBin/frosting)
+Backend - [cupcake](https://github.com/javaBin/cupcake) (https://cupcake-backend.javazone.no)
+Frontend - [frosting](https://github.com/javaBin/frosting) (https://cupcake.javazone.no)
 
 ### Session Search
 
