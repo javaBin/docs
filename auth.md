@@ -8,7 +8,7 @@ All javaBin heroes get a `@java.no` Google Workspace account, auto-created when 
 
 ## AWS Console and CLI: IAM Identity Center + Google Workspace
 
-IAM Identity Center gives javaBin volunteers AWS console and CLI access. Its identity source is Google Workspace: volunteers sign in with their `@java.no` Google account (SAML), and Google's AWS app provisions Workspace users into Identity Center automatically (SCIM).
+IAM Identity Center gives javaBin volunteers AWS console and CLI access. Its identity source is Google Workspace: volunteers sign in with their `@java.no` Google account (SAML), and Google's AWS app provisions users into Identity Center (SCIM). It provisions only the **direct** members of `drift@`, `styret@` and `javabin-developer@java.no`; nested groups are not expanded.
 
 - Each registered team gets the permission set `javabin-team-<team>`, assigned to the Identity Center group `team-<team>` (the members of `teams/<team>.yaml`). It is scoped to the team's own resources. Use this one for app work (setting secrets, inspecting your services).
 - Groups with `identity_center: true` in the registry's `groups/groups.yaml` are synced to Identity Center with the `permission_set` they name; `memberships` in `groups/members.yaml` decides who is in them. Today: `styret` gets `javabin-readonly`, `drift` gets `javabin-admin`, `kodesmia` gets `javabin-developer`.
@@ -17,19 +17,20 @@ IAM Identity Center gives javaBin volunteers AWS console and CLI access. Its ide
 
 ### How sign-in works
 
-1. A registry change creates your `@java.no` Google account (`groups/members.yaml`) and puts you in your team (`teams/<team>.yaml`).
-2. Google's AWS app creates your Identity Center user, but only for accounts inside the auto-provisioning scope a Google Workspace admin has set on that app.
-3. The registry's provisioning (`Provision Teams` / `Provision Groups` workflows, run when `teams/` or `groups/` change) adds your Identity Center user to `team-<team>` and to the groups above. It skips anyone who has no Identity Center user yet.
-4. You sign in at `https://aws.javabin.no` (redirects to `https://javabin.awsapps.com/start/`), or from the CLI after `javabin aws setup`. The access portal lists one role per permission set you have.
+1. A registry change creates your `@java.no` Google account (`groups/members.yaml`) and puts you in your team (`teams/<team>.yaml`) or in `kodesmia`.
+2. The team provisioner adds team members and kodesmia members (by their `@java.no` address) as direct members of `javabin-developer@java.no`. Personal addresses can't be provisioned.
+3. Google's SCIM sync then creates your Identity Center user, some time later.
+4. A provisioner run every 3 hours adds your Identity Center user to `team-<team>`, which gives you the `javabin-team-<team>` role (and to `kodesmia` if you are in it). The registry run that added you to `javabin-developer@` skipped you because your user did not exist yet.
+5. You sign in at `https://aws.javabin.no` (redirects to `https://javabin.awsapps.com/start/`), or from the CLI after `javabin aws setup`. The access portal lists one role per permission set you have.
 
 Set up the CLI with `javabin aws setup` (writes the SSO session and one profile per role you have, then signs in) and check it with `javabin aws doctor`. Install with `brew install javaBin/tap/javabin`. Renew an expired session with `aws sso login --sso-session javabin`.
 
 ### When AWS sign-in fails
 
-- **Google signs you in, but AWS refuses you or shows no account.** Identity Center has no user for your Google account: it is outside the AWS app's auto-provisioning scope in Google Admin. You cannot fix this yourself. Ask a Google Workspace admin to add you to that scope. Once your user exists, ask a registry maintainer to run the registry's `Provision Teams` workflow (Actions, Run workflow) so you are added to `team-<team>` (and `Provision Groups` for the groups above); the run that added you skipped you.
+- **Google signs you in, but AWS refuses you or shows no account.** Identity Center has no user for your Google account. Google's SCIM sync may not have run yet after you were added to `javabin-developer@`; if it persists, you are not provisioned. You cannot fix this yourself: ask a platform admin.
 - **Google says the app is not configured for you.** The AWS app is not turned on for your account. A Google Workspace admin has to enable it.
 - **AWS sees the wrong Google account.** Google's SAML sign-in uses the browser's active Google session and shows no account chooser. Switch to your `@java.no` account first, or use a private window.
-- **You sign in but `javabin-team-<team>` is missing.** Check that you are in `teams/<team>.yaml`. If you are, you were probably provisioned into Identity Center after the last team sync: ask for a `Provision Teams` run as above.
+- **You sign in but `javabin-team-<team>` is missing.** Check that you are in `teams/<team>.yaml`. If you are, your Identity Center user was probably created after the last team sync: the 3-hourly provisioner run adds you to `team-<team>`. If it is still missing after that, ask a platform admin.
 
 ## CI/CD: GitHub OIDC
 

@@ -26,7 +26,8 @@ budget_nok: 5000        # optional, default 500 NOK/month
 
 A platform owner (`@javaBin/platform-owners`) reviews and merges. The merge provisions:
 
-- a Google Group `team-<team>@java.no` and a GitHub team (members become maintainers)
+- a Google Group `team-<team>@java.no` and a GitHub team. Members are GitHub team maintainers, so they can add repos to the team; add `role: member` to a member's entry to make them a plain team member instead. In the Google Group everyone is a member unless their entry says `role: maintainer` (then manager).
+- `@java.no` members are added to `javabin-developer@java.no`, which is how Google provisions them into IAM Identity Center (see step 4)
 - the team's AWS CI roles `javabin-ci-team-<team>` and `javabin-ci-deploy-<team>` (only registry teams get them, so an unregistered team cannot deploy)
 - an IAM Identity Center permission set `javabin-team-<team>` for the members
 - a monthly AWS budget (alert at 80%, services scaled to zero at 200%)
@@ -88,7 +89,9 @@ javabin aws doctor    # checks config, token, and which profile javabin would us
 
 Use the `javabin-team-<team>` profile for your team's resources (`--profile javabin-team-<team>` or `AWS_PROFILE`). The `javabin-developer` profile, if you have it, cannot reach team resources. Sessions last 4 hours; renew with `aws sso login --sso-session javabin`.
 
-If Google signs you in but AWS refuses you, your Google account has not been provisioned into IAM Identity Center and an admin has to add it. See [When AWS sign-in fails](auth.md#when-aws-sign-in-fails).
+How you get AWS access: Google provisions only the direct members of `drift@`, `styret@` and `javabin-developer@java.no` into IAM Identity Center. The team provisioner adds team members and kodesmia members to `javabin-developer@`, Google's SCIM sync then creates their Identity Center user, and a provisioner run every 3 hours adds them to `team-<team>`, which gives them the `javabin-team-<team>` role. A new member can therefore wait a few hours before the role shows up.
+
+If Google signs you in but AWS refuses you, you have not been provisioned into IAM Identity Center: ask a platform admin. See [When AWS sign-in fails](auth.md#when-aws-sign-in-fails).
 
 ## 5. Secrets
 
