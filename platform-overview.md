@@ -38,7 +38,7 @@ Seven Terraform sub-modules manage shared resources:
 | **compute** | ECS Fargate cluster (`javabin-platform`), ECR base config |
 | **monitoring** | SNS topics, EventBridge rules, AWS Config, GuardDuty, Security Hub |
 | **lambdas** | Lambda functions for alerts, cost reporting, compliance, budget enforcement, tagging, team provisioning, CI credential brokering, plan review, Cognito clients, secret rollout |
-| **identity** | Cognito user pools (internal + external), `auth-claims` trigger. Internal pool signs in via Google Workspace SAML. Identity Center is in `terraform/org/` |
+| **identity** | Cognito user pools (internal + external), `auth-claims` trigger. Internal pool signs in via Google OIDC. Identity Center is in `terraform/org/` |
 
 ### Reusable Modules (`terraform/modules/`)
 
@@ -98,7 +98,7 @@ The [registry](https://github.com/javaBin/registry) serves two purposes:
 
 **Groups & Heroes** (`groups/`) — organizational membership for all javaBin volunteers:
 - `groups.yaml` defines all groups (helter, styret, javazone, pkom, kodesmia, region, drift, admin, developers, etc.) with their properties (Google Workspace email, Cognito/Identity Center flags)
-- `heros.yaml` defines all hero members with their group assignments
+- `members.yaml` defines all hero members with their group assignments
 
 Changes to `groups/` trigger provisioning: Google Workspace account creation, group membership sync, email aliases, and Cognito/Identity Center sync where configured. Heroes are synced from a yearly Google Sheets application process.
 

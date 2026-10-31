@@ -86,7 +86,9 @@ javabin aws setup     # writes the SSO session + one profile per role you have, 
 javabin aws doctor    # checks config, token, and which profile javabin would use
 ```
 
-Use the `javabin-team-<team>` profile for your team's resources (`--profile javabin-team-<team>` or `AWS_PROFILE`). Sessions last about 8 hours; renew with `aws sso login --sso-session javabin`.
+Use the `javabin-team-<team>` profile for your team's resources (`--profile javabin-team-<team>` or `AWS_PROFILE`). The `javabin-developer` profile, if you have it, cannot reach team resources. Sessions last 4 hours; renew with `aws sso login --sso-session javabin`.
+
+If Google signs you in but AWS refuses you, your Google account has not been provisioned into IAM Identity Center and an admin has to add it. See [When AWS sign-in fails](auth.md#when-aws-sign-in-fails).
 
 ## 5. Secrets
 
@@ -121,15 +123,16 @@ These fail the pipeline with an explanation (see [Not supported](https://github.
 The registry is also the source of truth for all javaBin hero volunteers (~70 people/year). This is separate from teams: teams are for app developers who need AWS access, heroes are all active volunteers.
 
 1. The board sends yearly Google Forms for hero applications; approved heroes are marked in the response sheet.
-2. A sync opens a PR on the registry updating `groups/heros.yaml`.
-3. Merging provisions Google Workspace accounts for new heroes, adds everyone to `helter@java.no`, and adds heroes to their membership groups (styret, javazone, pkom, kodesmia, region, etc.).
+2. A sync opens a PR on the registry updating `groups/members.yaml`.
+3. Merging provisions Google Workspace accounts for new heroes and adds them to the groups in their `memberships` (helter, styret, javazone, pkom, kodesmia, region, etc.).
 
 ```
 registry/
   teams/              # app developer teams (GitHub team, AWS roles, budget)
   groups/
     groups.yaml       # group definitions (Google email, Cognito/Identity Center flags)
-    heros.yaml        # heroes (name, email, alias, memberships)
+    members.yaml      # heroes (name, emails, alias, memberships)
+    access.yaml       # which groups may use Gmail, Drive, Chat, Meet
 ```
 
-Being in `heros.yaml` implies membership of `helter`; the `memberships` field adds other groups. Heroes can PR an email alias (e.g. `alex@java.no`).
+All group memberships are explicit, `helter` included: list every group in `memberships`. Heroes can PR an email alias (e.g. `alex@java.no`).
